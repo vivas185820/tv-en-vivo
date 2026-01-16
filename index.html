@@ -48,6 +48,19 @@ header {
   text-align:center;
 }
 .card:hover { background:#1f1f1f; }
+
+#lock {
+  position:fixed;
+  top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.9);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  flex-direction:column;
+  z-index:9999;
+}
+#lock h2 { margin-bottom:15px; }
 </style>
 </head>
 
@@ -74,10 +87,18 @@ header {
 
 <div class="grid" id="channels"></div>
 
+<div id="lock">
+  <h2>🔒 Tiempo de prueba terminado</h2>
+  <p>Inicia sesión con Google para seguir viendo canales ilimitados.</p>
+  <div class="g_id_signin" data-type="standard"></div>
+</div>
+
 <script>
 const playlistURL = "https://iptv-org.github.io/iptv/index.m3u";
 let allChannels = [];
 let currentIndex = 0;
+let loggedIn = false;
+let timer;
 
 fetch(playlistURL)
 .then(r => r.text())
@@ -90,6 +111,7 @@ fetch(playlistURL)
   }
   render(allChannels);
   playIndex(0);
+  startTrialTimer();
 });
 
 function render(list){
@@ -120,12 +142,8 @@ function playIndex(i){
   }
 }
 
-function nextChannel(){
-  if(currentIndex < allChannels.length - 1) playIndex(currentIndex + 1);
-}
-function prevChannel(){
-  if(currentIndex > 0) playIndex(currentIndex - 1);
-}
+function nextChannel(){ if(currentIndex < allChannels.length - 1) playIndex(currentIndex + 1); }
+function prevChannel(){ if(currentIndex > 0) playIndex(currentIndex - 1); }
 
 document.getElementById("search").addEventListener("input", function(){
   const t = this.value.toLowerCase();
@@ -133,13 +151,27 @@ document.getElementById("search").addEventListener("input", function(){
   render(f);
 });
 
+// Timer de 2 minutos para invitados
+function startTrialTimer(){
+  timer = setTimeout(() => {
+    if(!loggedIn){
+      document.getElementById("player").pause();
+      document.getElementById("lock").style.display = "flex";
+    }
+  }, 120000); // 2 minutos
+}
+
 // Login Google
 function handleLogin(response) {
   const data = JSON.parse(atob(response.credential.split('.')[1]));
+  loggedIn = true;
   document.getElementById("user").innerText = "👤 " + data.name;
+  document.getElementById("lock").style.display = "none";
+  clearTimeout(timer);
 }
 </script>
 
 </body>
 </html>
+
 
