@@ -11,16 +11,16 @@
 body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
 #header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center;z-index:1000}
 #playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000;z-index:999}
-#player{width:100%;height:100%;object-fit:contain;background:#000}
+#player{width:100%;height:100%;object-fit:contain}
 #content{margin-top:235px;padding:10px}
 .section-title{font-size:14px;margin:8px 0 4px}
-.controls select,.controls input{width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;border:none;padding:6px;border-radius:5px}
-.fav-btn{background:#e50914;border:none;color:white;padding:6px;border-radius:5px;width:100%;margin-bottom:6px}
+select,input,button{width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;border:none;padding:6px;border-radius:5px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .channel{background:#1a1a1a;border-radius:6px;padding:6px;text-align:center}
 .channel img{width:100%;height:60px;object-fit:contain}
 .channel-name{font-size:12px;margin-top:4px}
-.fav{font-size:18px;cursor:pointer}
+.fav{font-size:18px}
+#loader{text-align:center;margin:20px;font-size:14px}
 </style>
 </head>
 
@@ -29,130 +29,162 @@ body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
 <div id="header">📺 TV en Vivo VT</div>
 
 <div id="playerWrapper">
-  <video id="player" controls playsinline webkit-playsinline></video>
+  <video id="player" controls playsinline></video>
 </div>
 
 <div id="content">
 
   <div class="section-title">⭐ Favoritos</div>
-  <button class="fav-btn" onclick="showFavorites()">Ver solo favoritos</button>
+  <button onclick="showFavorites()">Ver solo favoritos</button>
 
   <div class="section-title">🗂 Categorías</div>
   <select id="category"></select>
 
-  <div class="section-title">🔍 Buscar canal</div>
-  <input type="text" id="search" placeholder="Escribe el nombre...">
+  <div class="section-title">🔍 Buscar</div>
+  <input id="search" placeholder="Buscar canal...">
 
+  <div id="loader">⏳ Cargando canales...</div>
   <div class="grid" id="channelList"></div>
+
 </div>
 
 <script>
 const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
+const CACHE_KEY = "iptv_cache_spa";
+const CACHE_TIME = 1000*60*60*24; // 24 horas
+const PAGE_SIZE = 40;
 
 let allChannels = [];
 let visibleChannels = [];
-let favorites = JSON.parse(localStorage.getItem("favorites_vt") || "[]");
+let favorites = JSON.parse(localStorage.getItem("favorites_vt")||"[]");
+let page = 0;
 
-fetch(IPTV_URL)
-  .then(r => r.text())
-  .then(parseM3U);
+async function loadList(){
+  const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
+  if(cached && (Date.now()-cached.time)<CACHE_TIME){
+    allChannels = cached.data;
+    initUI();
+  }else{
+    const res = await fetch(IPTV_URL);
+    const text = await res.text();
+    allChannels = parseM3U(text);
+    localStorage.setItem(CACHE_KEY, JSON.stringify({time:Date.now(), data:allChannels}));
+    initUI();
+  }
+}
 
 function parseM3U(text){
   const lines = text.split("\n");
+  const arr=[];
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith("#EXTINF")){
-      const name = lines[i].split(",")[1]?.trim() || "Canal";
-      const logo = (lines[i].match(/tvg-logo="(.*?)"/)||[])[1] || "https://via.placeholder.com/150x80?text=TV";
-      const group = (lines[i].match(/group-title="(.*?)"/)||[])[1] || "Otros";
+      const name = lines[i].split(",")[1]||"Canal";
+      const logo = (lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://via.placeholder.com/150x80?text=TV";
+      const group = (lines[i].match(/group-title="(.*?)"/)||[])[1]||"Otros";
       const url = lines[i+1];
-      const id = btoa(name + url); // ID único
-      allChannels.push({id,name,logo,group,url});
+      const id = btoa(name+url);
+      arr.push({id,name,logo,group,url});
     }
   }
+  return arr;
+}
+
+function initUI(){
+  document.getElementById("loader").style.display="none";
   visibleChannels = allChannels;
   buildCategories();
-  renderFast();
+  renderNextPage();
   play(0);
 }
 
 function buildCategories(){
   const cat = document.getElementById("category");
-  const groups = ["Todos", ...new Set(allChannels.map(c=>c.group))];
-  cat.innerHTML = "";
+  const groups=["Todos",...new Set(allChannels.map(c=>c.group))];
+  cat.innerHTML="";
   groups.forEach(g=>{
     const o=document.createElement("option");
     o.value=g; o.textContent=g;
     cat.appendChild(o);
   });
-  cat.onchange = ()=>{
+  cat.onchange=()=>{
     visibleChannels = cat.value==="Todos" ? allChannels : allChannels.filter(c=>c.group===cat.value);
-    renderFast();
+    resetRender();
   };
 }
 
-document.getElementById("search").oninput = e=>{
-  const t = e.target.value.toLowerCase();
+document.getElementById("search").oninput=e=>{
+  const t=e.target.value.toLowerCase();
   visibleChannels = allChannels.filter(c=>c.name.toLowerCase().includes(t));
-  renderFast();
+  resetRender();
 };
 
 function showFavorites(){
   visibleChannels = allChannels.filter(c=>favorites.includes(c.id));
-  renderFast();
+  resetRender();
 }
 
-function renderFast(){
-  const list=document.getElementById("channelList");
-  list.innerHTML="";
-  const fragment = document.createDocumentFragment();
+function resetRender(){
+  page=0;
+  document.getElementById("channelList").innerHTML="";
+  renderNextPage();
+}
 
-  visibleChannels.forEach((ch,i)=>{
+function renderNextPage(){
+  const start = page*PAGE_SIZE;
+  const end = start+PAGE_SIZE;
+  const slice = visibleChannels.slice(start,end);
+  const list = document.getElementById("channelList");
+  const frag = document.createDocumentFragment();
+
+  slice.forEach((ch,i)=>{
     const div=document.createElement("div");
     div.className="channel";
-
-    const favIcon = favorites.includes(ch.id) ? "★" : "☆";
-
     div.innerHTML=`
-      <img src="${ch.logo}">
+      <img loading="lazy" src="${ch.logo}">
       <div class="channel-name">${ch.name}</div>
-      <div class="fav" data-id="${ch.id}">${favIcon}</div>
+      <div class="fav" onclick="event.stopPropagation();toggleFavorite('${ch.id}')">
+        ${favorites.includes(ch.id)?"★":"☆"}
+      </div>
     `;
-
-    div.onclick=()=>play(i);
-    div.querySelector(".fav").onclick = (e)=>{
-      e.stopPropagation();
-      toggleFavorite(ch.id);
-    };
-
-    fragment.appendChild(div);
+    div.onclick=()=>play(start+i);
+    frag.appendChild(div);
   });
 
-  list.appendChild(fragment);
+  list.appendChild(frag);
+  page++;
 }
 
+window.addEventListener("scroll",()=>{
+  if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){
+    renderNextPage();
+  }
+});
+
 function play(index){
-  const video=document.getElementById("player");
+  const v=document.getElementById("player");
   const url=visibleChannels[index].url;
   if(Hls.isSupported()){
     const hls=new Hls();
     hls.loadSource(url);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play());
+    hls.attachMedia(v);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
   }else{
-    video.src=url;
-    video.play();
+    v.src=url;
+    v.play();
   }
 }
 
 function toggleFavorite(id){
   if(favorites.includes(id)){
-    favorites = favorites.filter(f=>f!==id);
+    favorites=favorites.filter(f=>f!==id);
   }else{
     favorites.push(id);
   }
   localStorage.setItem("favorites_vt", JSON.stringify(favorites));
-  renderFast();
+  resetRender();
 }
+
+loadList();
 </script>
 
 </body>
