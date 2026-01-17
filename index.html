@@ -7,72 +7,20 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <style>
-* { box-sizing: border-box; }
-body { margin:0; background:#0b0b0b; color:#fff; font-family:Arial; }
-
-#header {
-  position:fixed; top:0; left:0; right:0;
-  height:44px; background:#111;
-  display:flex; align-items:center; justify-content:center;
-  z-index:1000;
-}
-
-#playerWrapper {
-  position:fixed; top:44px; left:0; right:0;
-  height:180px; background:black; z-index:999;
-}
-
-#player {
-  width:100%; height:100%; object-fit:contain; background:black;
-}
-
-#content {
-  margin-top:235px; padding:10px;
-}
-
-.section-title {
-  font-size:14px; margin:8px 0 4px;
-}
-
-.controls select, .controls input {
-  width:100%;
-  margin-bottom:6px;
-  background:#1c1c1c;
-  color:#fff;
-  border:none;
-  padding:6px;
-  border-radius:5px;
-}
-
-.fav-btn {
-  background:#e50914;
-  border:none;
-  color:white;
-  padding:6px;
-  border-radius:5px;
-  width:100%;
-  margin-bottom:6px;
-}
-
-.grid {
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:10px;
-}
-
-.channel {
-  background:#1a1a1a;
-  border-radius:6px;
-  padding:6px;
-  text-align:center;
-}
-
-.channel img {
-  width:100%; height:60px; object-fit:contain;
-}
-
-.channel-name { font-size:12px; margin-top:4px; }
-.fav { font-size:16px; }
+*{box-sizing:border-box}
+body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
+#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center;z-index:1000}
+#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000;z-index:999}
+#player{width:100%;height:100%;object-fit:contain;background:#000}
+#content{margin-top:235px;padding:10px}
+.section-title{font-size:14px;margin:8px 0 4px}
+.controls select,.controls input{width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;border:none;padding:6px;border-radius:5px}
+.fav-btn{background:#e50914;border:none;color:white;padding:6px;border-radius:5px;width:100%;margin-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.channel{background:#1a1a1a;border-radius:6px;padding:6px;text-align:center}
+.channel img{width:100%;height:60px;object-fit:contain}
+.channel-name{font-size:12px;margin-top:4px}
+.fav{font-size:18px;cursor:pointer}
 </style>
 </head>
 
@@ -103,24 +51,27 @@ const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
 
 let allChannels = [];
 let visibleChannels = [];
-let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+let favorites = JSON.parse(localStorage.getItem("favorites_vt") || "[]");
 
-fetch(IPTV_URL).then(r=>r.text()).then(parseM3U);
+fetch(IPTV_URL)
+  .then(r => r.text())
+  .then(parseM3U);
 
 function parseM3U(text){
   const lines = text.split("\n");
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith("#EXTINF")){
-      const name = lines[i].split(",")[1];
+      const name = lines[i].split(",")[1]?.trim() || "Canal";
       const logo = (lines[i].match(/tvg-logo="(.*?)"/)||[])[1] || "https://via.placeholder.com/150x80?text=TV";
       const group = (lines[i].match(/group-title="(.*?)"/)||[])[1] || "Otros";
       const url = lines[i+1];
-      allChannels.push({name,logo,group,url});
+      const id = btoa(name + url); // ID único
+      allChannels.push({id,name,logo,group,url});
     }
   }
   visibleChannels = allChannels;
   buildCategories();
-  render();
+  renderFast();
   play(0);
 }
 
@@ -135,38 +86,48 @@ function buildCategories(){
   });
   cat.onchange = ()=>{
     visibleChannels = cat.value==="Todos" ? allChannels : allChannels.filter(c=>c.group===cat.value);
-    render();
+    renderFast();
   };
 }
 
 document.getElementById("search").oninput = e=>{
   const t = e.target.value.toLowerCase();
   visibleChannels = allChannels.filter(c=>c.name.toLowerCase().includes(t));
-  render();
+  renderFast();
 };
 
 function showFavorites(){
-  visibleChannels = allChannels.filter(c=>favorites.includes(c.name));
-  render();
+  visibleChannels = allChannels.filter(c=>favorites.includes(c.id));
+  renderFast();
 }
 
-function render(){
+function renderFast(){
   const list=document.getElementById("channelList");
   list.innerHTML="";
+  const fragment = document.createDocumentFragment();
+
   visibleChannels.forEach((ch,i)=>{
     const div=document.createElement("div");
     div.className="channel";
 
+    const favIcon = favorites.includes(ch.id) ? "★" : "☆";
+
     div.innerHTML=`
       <img src="${ch.logo}">
       <div class="channel-name">${ch.name}</div>
-      <div class="fav" onclick="toggleFavorite('${ch.name}', event)">
-        ${favorites.includes(ch.name)?"★":"☆"}
-      </div>
+      <div class="fav" data-id="${ch.id}">${favIcon}</div>
     `;
+
     div.onclick=()=>play(i);
-    list.appendChild(div);
+    div.querySelector(".fav").onclick = (e)=>{
+      e.stopPropagation();
+      toggleFavorite(ch.id);
+    };
+
+    fragment.appendChild(div);
   });
+
+  list.appendChild(fragment);
 }
 
 function play(index){
@@ -183,15 +144,14 @@ function play(index){
   }
 }
 
-function toggleFavorite(name, e){
-  e.stopPropagation();
-  if(favorites.includes(name)){
-    favorites=favorites.filter(f=>f!==name);
+function toggleFavorite(id){
+  if(favorites.includes(id)){
+    favorites = favorites.filter(f=>f!==id);
   }else{
-    favorites.push(name);
+    favorites.push(id);
   }
-  localStorage.setItem("favorites", JSON.stringify(favorites));
-  render();
+  localStorage.setItem("favorites_vt", JSON.stringify(favorites));
+  renderFast();
 }
 </script>
 
