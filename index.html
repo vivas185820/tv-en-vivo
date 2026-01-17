@@ -10,7 +10,9 @@
 body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
 #playerBox { position:fixed; top:0; left:0; right:0; height:180px; background:black; }
 #player { width:100%; height:100%; object-fit:contain; }
-#list { margin-top:190px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:10px; }
+#controls { margin-top:190px; padding:10px; }
+#search { width:100%; padding:8px; border:none; border-radius:5px; background:#1c1c1c; color:white; margin-bottom:10px; }
+#list { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
 .channel { background:#1a1a1a; padding:6px; border-radius:6px; text-align:center; }
 .channel img { width:100%; height:60px; object-fit:contain; }
 .name { font-size:12px; }
@@ -23,41 +25,55 @@ body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
   <video id="player" controls autoplay></video>
 </div>
 
+<div id="controls">
+  <input id="search" placeholder="Buscar canal...">
+</div>
+
 <div id="list"></div>
 
 <script>
 const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
+let allChannels = [];
 
 fetch(IPTV_URL)
   .then(r => r.text())
   .then(text => {
     const lines = text.split("\n");
-    const channels = [];
 
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].startsWith("#EXTINF")) {
         const name = lines[i].split(",")[1];
         const logo = (lines[i].match(/tvg-logo="(.*?)"/) || [])[1] || "";
         const url = lines[i+1];
-        channels.push({name, logo, url});
+        allChannels.push({name, logo, url});
       }
     }
 
-    const list = document.getElementById("list");
-    channels.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "channel";
-      div.innerHTML = `
-        <img src="${c.logo}">
-        <div class="name">${c.name}</div>
-      `;
-      div.onclick = () => play(c.url);
-      list.appendChild(div);
-    });
-
-    if (channels.length > 0) play(channels[0].url);
+    render(allChannels);
+    if (allChannels.length > 0) play(allChannels[0].url);
   })
   .catch(() => alert("No se pudo cargar la lista"));
+
+function render(list){
+  const box = document.getElementById("list");
+  box.innerHTML = "";
+  list.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "channel";
+    div.innerHTML = `
+      <img src="${c.logo}">
+      <div class="name">${c.name}</div>
+    `;
+    div.onclick = () => play(c.url);
+    box.appendChild(div);
+  });
+}
+
+document.getElementById("search").oninput = function(){
+  const text = this.value.toLowerCase();
+  const filtered = allChannels.filter(c => c.name.toLowerCase().includes(text));
+  render(filtered);
+};
 
 function play(url) {
   const video = document.getElementById("player");
