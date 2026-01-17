@@ -4,156 +4,187 @@
 <meta charset="UTF-8">
 <title>TV en Vivo VT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-<!-- Adsterra Banner -->
-<script>
-atOptions = {
-  'key' : '9e84da7cb4c4852358b069502cb5718d',
-  'format' : 'iframe',
-  'height' : 60,
-  'width' : 468,
-  'params' : {}
-};
-</script>
-<script src="https://www.highperformanceformat.com/9e84da7cb4c4852358b069502cb5718d/invoke.js"></script>
-
 <style>
-body { margin:0; background:#000; color:white; font-family:Arial; }
-header { background:#111; padding:10px; text-align:center; font-size:20px; position:sticky; top:0; z-index:1000; }
-#playerBox { position:sticky; top:50px; background:black; z-index:999; }
-#player { width:100%; height:260px; }
-#controls { display:flex; justify-content:space-around; padding:8px; background:#1a1a1a; }
-button { background:#e50914; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; }
-#search { width:95%; margin:10px auto; display:block; padding:10px; border-radius:20px; border:none; }
-.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; padding:10px; }
-.card { background:#1a1a1a; padding:10px; border-radius:8px; cursor:pointer; }
+body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
+#topbar {
+  position:fixed; top:0; left:0; right:0;
+  background:#111; z-index:1000; padding:8px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+#player {
+  width:100%; height:260px; background:black;
+}
+#controls button {
+  background:#1f1f1f; color:#fff; border:none; padding:6px 10px; border-radius:4px; cursor:pointer;
+}
+#content { margin-top:300px; padding:10px; }
+#filters, #search { margin:8px 0; }
+#filters select, #search input { width:100%; padding:8px; border-radius:6px; border:none; }
+.grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;
+}
+.card {
+  background:#1a1a1a; padding:10px; border-radius:6px; cursor:pointer;
+}
 .card.active { background:#333; }
-#category { width:95%; margin:10px auto; padding:8px; border-radius:10px; }
-#ad { text-align:center; margin:10px; }
+.small { font-size:12px; color:#bbb; }
+
+#settings {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.9); display:none; z-index:2000;
+  align-items:center; justify-content:center;
+}
+#settingsBox {
+  background:#111; padding:20px; border-radius:8px; width:90%; max-width:400px;
+}
 </style>
 </head>
 
 <body>
 
-<header>📺 TV en Vivo VT</header>
-
-<div id="playerBox">
-  <video id="player" controls autoplay></video>
+<div id="topbar">
+  <div>📺 TV en Vivo VT</div>
   <div id="controls">
-    <button onclick="castScreen()">📡 Transmitir</button>
+    <button onclick="openSettings()">⚙ Ajustes</button>
     <button onclick="showFavorites()">⭐ Favoritos</button>
   </div>
 </div>
 
-<div id="ad"></div>
+<video id="player" controls autoplay></video>
 
-<select id="category" onchange="filterCategory()">
-  <option value="ALL">🌍 Todas las categorías</option>
-</select>
+<div id="content">
+  <div id="filters">
+    <select id="category" onchange="filterCategory()">
+      <option value="ALL">Todas las categorías</option>
+    </select>
+  </div>
 
-<input type="text" id="search" placeholder="🔍 Buscar canal...">
+  <div id="search">
+    <input type="text" placeholder="Buscar canal..." oninput="search(this.value)">
+  </div>
 
-<div class="grid" id="list"></div>
+  <div class="grid" id="list"></div>
+</div>
+
+<!-- Ajustes -->
+<div id="settings">
+  <div id="settingsBox">
+    <h3>⚙ Ajustes IPTV</h3>
+    <label>URL de la lista M3U:</label>
+    <input type="text" id="iptvUrl" style="width:100%;padding:8px;margin:10px 0;">
+    <button onclick="saveSettings()">Guardar y recargar</button>
+    <button onclick="closeSettings()">Cerrar</button>
+  </div>
+</div>
 
 <script>
-const IPTV_URL = https://iptv-org.github.io/iptv/index.nsfw.m3u;
-let allChannels = [];
-let filtered = [];
-let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
-let currentIndex = 0;
+let IPTV_URL = localStorage.getItem("iptv_url") || "https://iptv-org.github.io/iptv/index.nsfw.m3u";
+let all = [], filtered = [], favorites = JSON.parse(localStorage.getItem("favorites")||"[]");
+let current = 0;
 
-// Cargar lista
-fetch(IPTV_URL)
-.then(r=>r.text())
-.then(data=>{
-  const lines = data.split("\n");
-  for(let i=0;i<lines.length;i++){
-    if(lines[i].startsWith("#EXTINF")){
-      const name = lines[i].split(",")[1];
-      const groupMatch = lines[i].match(/group-title="(.*?)"/);
-      const group = groupMatch ? groupMatch[1] : "Otros";
-      const url = lines[i+1];
-      allChannels.push({name, group, url});
+document.getElementById("iptvUrl").value = IPTV_URL;
+
+loadIPTV();
+
+function loadIPTV(){
+  fetch(IPTV_URL).then(r=>r.text()).then(data=>{
+    const lines=data.split("\n");
+    all=[];
+    for(let i=0;i<lines.length;i++){
+      if(lines[i].startsWith("#EXTINF")){
+        const name=lines[i].split(",")[1];
+        const group=(lines[i].match(/group-title="(.*?)"/)||[])[1]||"Otros";
+        const url=lines[i+1];
+        all.push({name,group,url});
+      }
     }
-  }
-  filtered = allChannels;
-  buildCategories();
-  render();
-  play(0);
-});
+    filtered=all;
+    buildCategories();
+    render();
+    play(0);
+  });
+}
 
 function buildCategories(){
-  const groups = [...new Set(allChannels.map(c=>c.group))];
-  const sel = document.getElementById("category");
-  groups.forEach(g=>{
-    const opt = document.createElement("option");
-    opt.value = g;
-    opt.textContent = g;
-    sel.appendChild(opt);
+  const sel=document.getElementById("category");
+  sel.innerHTML='<option value="ALL">Todas las categorías</option>';
+  [...new Set(all.map(c=>c.group))].forEach(g=>{
+    const o=document.createElement("option");
+    o.value=g; o.textContent=g;
+    sel.appendChild(o);
   });
 }
 
 function filterCategory(){
-  const cat = document.getElementById("category").value;
-  filtered = cat==="ALL" ? allChannels : allChannels.filter(c=>c.group===cat);
+  const v=document.getElementById("category").value;
+  filtered = v==="ALL" ? all : all.filter(c=>c.group===v);
+  render();
+}
+
+function search(t){
+  t=t.toLowerCase();
+  filtered = all.filter(c=>c.name.toLowerCase().includes(t));
   render();
 }
 
 function render(){
-  const grid = document.getElementById("list");
+  const grid=document.getElementById("list");
   grid.innerHTML="";
   filtered.forEach((c,i)=>{
-    const d = document.createElement("div");
-    d.className = "card" + (i===currentIndex ? " active":"");
-    d.innerHTML = c.name + `<br><small onclick="event.stopPropagation();toggleFav('${c.name}')">
-      ${favorites.includes(c.name) ? "★ Quitar" : "☆ Favorito"}</small>`;
-    d.onclick = ()=>play(i);
+    const d=document.createElement("div");
+    d.className="card"+(i===current?" active":"");
+    d.innerHTML = `<strong>${c.name}</strong><br>
+      <span class="small">${c.group}</span><br>
+      <span class="small" onclick="event.stopPropagation();toggleFav('${c.name}')">
+        ${favorites.includes(c.name)?"★ Quitar":"☆ Favorito"}
+      </span>`;
+    d.onclick=()=>play(i);
     grid.appendChild(d);
   });
 }
 
 function play(i){
-  currentIndex = i;
-  const video = document.getElementById("player");
-  const url = filtered[i].url;
-
+  current=i;
+  const v=document.getElementById("player");
+  const url=filtered[i].url;
   if(Hls.isSupported()){
-    const hls = new Hls();
+    const hls=new Hls();
     hls.loadSource(url);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play());
+    hls.attachMedia(v);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
   } else {
-    video.src = url;
-    video.play();
+    v.src=url; v.play();
   }
   render();
 }
 
 function toggleFav(name){
-  if(favorites.includes(name)){
-    favorites = favorites.filter(f=>f!==name);
-  } else {
-    favorites.push(name);
-  }
+  if(favorites.includes(name)) favorites=favorites.filter(f=>f!==name);
+  else favorites.push(name);
   localStorage.setItem("favorites", JSON.stringify(favorites));
   render();
 }
 
 function showFavorites(){
-  filtered = allChannels.filter(c=>favorites.includes(c.name));
+  filtered = all.filter(c=>favorites.includes(c.name));
   render();
 }
 
-document.getElementById("search").addEventListener("input", function(){
-  const t = this.value.toLowerCase();
-  filtered = allChannels.filter(c=>c.name.toLowerCase().includes(t));
-  render();
-});
-
-function castScreen(){
-  alert("Para transmitir a tu TV, usa 'Transmitir Pantalla' desde el menú de Android.");
+// Ajustes
+function openSettings(){ document.getElementById("settings").style.display="flex"; }
+function closeSettings(){ document.getElementById("settings").style.display="none"; }
+function saveSettings(){
+  const url=document.getElementById("iptvUrl").value.trim();
+  if(url){
+    localStorage.setItem("iptv_url", url);
+    IPTV_URL=url;
+    closeSettings();
+    loadIPTV();
+  }
 }
 </script>
 
