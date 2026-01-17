@@ -5,11 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TV en Vivo VT</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
 <style>
 body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
-#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center;z-index:10}
-#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000;z-index:9}
+#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center}
+#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000}
 #player{width:100%;height:100%;object-fit:contain}
 #content{margin-top:235px;padding:10px}
 button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding:8px;border-radius:6px;margin-bottom:8px}
@@ -19,7 +18,6 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 .name{font-size:12px}
 .fav{font-size:18px}
 #status{text-align:center;margin:15px}
-#settings{display:none;background:#111;padding:10px;border-radius:8px;margin-bottom:10px}
 </style>
 </head>
 
@@ -35,9 +33,9 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 <button onclick="showFavorites()">⭐ Ver favoritos</button>
 <button onclick="toggleSettings()">⚙ Ajustes IPTV</button>
 
-<div id="settings">
-  <input id="iptvUrl" placeholder="Pega tu lista IPTV (.m3u)">
-  <button onclick="saveIPTV()">Guardar lista</button>
+<div id="settings" style="display:none">
+  <input id="iptvUrl">
+  <button onclick="saveIPTV()">Guardar</button>
 </div>
 
 <select id="category"></select>
@@ -48,8 +46,8 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 </div>
 
 <script>
-let IPTV_URL = localStorage.getItem("iptv_url") ||
-"https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u";
+let IPTV_URL = localStorage.getItem("iptv_url") || 
+"https://raw.githack.com/iptv-org/iptv/master/languages/spa.m3u";
 
 let all=[], view=[], favs=JSON.parse(localStorage.getItem("favs")||"[]");
 
@@ -59,9 +57,7 @@ function toggleSettings(){
 }
 
 function saveIPTV(){
-  let url = document.getElementById("iptvUrl").value.trim();
-  if(!url.startsWith("http")) return alert("URL inválida");
-  IPTV_URL = url;
+  IPTV_URL = document.getElementById("iptvUrl").value.trim();
   localStorage.setItem("iptv_url", IPTV_URL);
   location.reload();
 }
@@ -74,7 +70,6 @@ async function load(){
     initUI();
   }catch(e){
     document.getElementById("status").innerHTML="❌ No se pudo cargar la lista IPTV";
-    console.error(e);
   }
 }
 
@@ -134,7 +129,7 @@ function render(){
     const d=document.createElement("div");
     d.className="channel";
     d.innerHTML=`
-      <img loading="lazy" src="${c.logo}">
+      <img src="${c.logo}">
       <div class="name">${c.name}</div>
       <div class="fav" onclick="event.stopPropagation();toggleFav('${c.id}')">
         ${favs.includes(c.id)?"★":"☆"}
