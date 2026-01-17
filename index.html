@@ -21,31 +21,17 @@ atOptions = {
 
 <style>
 body { margin:0; background:#000; color:white; font-family:Arial; }
-header {
-  position:sticky; top:0; z-index:9999;
-  background:#111; padding:10px; text-align:center; font-size:20px;
-}
-#player { width:100%; height:300px; background:black; }
-#topbar {
-  display:flex; justify-content:space-around; padding:8px; background:#1a1a1a;
-}
-button { background:#e50914; color:white; border:none; padding:6px 12px; border-radius:6px; }
-#filters { display:flex; overflow-x:auto; gap:8px; padding:8px; }
-.filter { background:#333; padding:6px 10px; border-radius:12px; cursor:pointer; }
-.filter.active { background:#e50914; }
+header { background:#111; padding:10px; text-align:center; font-size:20px; position:sticky; top:0; z-index:1000; }
+#playerBox { position:sticky; top:50px; background:black; z-index:999; }
+#player { width:100%; height:260px; }
+#controls { display:flex; justify-content:space-around; padding:8px; background:#1a1a1a; }
+button { background:#e50914; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; }
 #search { width:95%; margin:10px auto; display:block; padding:10px; border-radius:20px; border:none; }
-.grid {
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-  gap:10px; padding:10px;
-}
-.card {
-  background:#1a1a1a; padding:10px; border-radius:8px; cursor:pointer;
-}
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; padding:10px; }
+.card { background:#1a1a1a; padding:10px; border-radius:8px; cursor:pointer; }
 .card.active { background:#333; }
-#epg {
-  background:#111; padding:10px; font-size:14px; border-top:1px solid #333;
-}
+#category { width:95%; margin:10px auto; padding:8px; border-radius:10px; }
+#ad { text-align:center; margin:10px; }
 </style>
 </head>
 
@@ -53,159 +39,122 @@ button { background:#e50914; color:white; border:none; padding:6px 12px; border-
 
 <header>📺 TV en Vivo VT</header>
 
-<video id="player" controls autoplay></video>
-
-<div id="topbar">
-  <button onclick="toggleFavorites()">⭐ Favoritos</button>
-  <button onclick="loadTV()">📡 TV</button>
-  <button onclick="loadRadio()">📻 Radios RD</button>
+<div id="playerBox">
+  <video id="player" controls autoplay></video>
+  <div id="controls">
+    <button onclick="castScreen()">📡 Transmitir</button>
+    <button onclick="showFavorites()">⭐ Favoritos</button>
+  </div>
 </div>
 
-<div id="filters"></div>
+<div id="ad"></div>
 
-<input type="text" id="search" placeholder="🔍 Buscar canal o radio...">
+<select id="category" onchange="filterCategory()">
+  <option value="ALL">🌍 Todas las categorías</option>
+</select>
+
+<input type="text" id="search" placeholder="🔍 Buscar canal...">
 
 <div class="grid" id="list"></div>
 
-<div id="epg">📅 Guía: Selecciona un canal para ver programación.</div>
-
 <script>
-const tvURL = "https://iptv-org.github.io/iptv/index.m3u";
-
-// Radios Dominicanas
-const radiosRD = [
-  {name:"Z101 FM", country:"RD", url:"https://stream.zeno.fm/7a1zq3zv7k8uv"},
-  {name:"La Mega 97.7", country:"RD", url:"https://stream.zeno.fm/8k6s8xg1d2zuv"},
-  {name:"Rumba 98.5", country:"RD", url:"https://stream.zeno.fm/0y1s7g1t2zuv"},
-  {name:"Caliente 104", country:"RD", url:"https://stream.zeno.fm/5h1s6g1t2zuv"},
-  {name:"CDN Radio", country:"RD", url:"https://stream.zeno.fm/1d1s6g1t2zuv"},
-  {name:"Radio Universal", country:"RD", url:"https://stream.zeno.fm/2e1s6g1t2zuv"}
-];
-
-let allItems = [];
-let items = [];
-let selected = 0;
-let mode = "tv";
-let showFavs = false;
+const IPTV_URL = "https://iptv-org.github.io/iptv/index.nsfw.m3u";
+let allChannels = [];
+let filtered = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+let currentIndex = 0;
 
-// Cargar TV por defecto
-loadTV();
-
-// Pantalla completa al rotar
-window.addEventListener("orientationchange", () => {
-  const v = document.getElementById("player");
-  if (screen.orientation.angle === 90 || screen.orientation.angle === 270) {
-    if (v.requestFullscreen) v.requestFullscreen();
+// Cargar lista
+fetch(IPTV_URL)
+.then(r=>r.text())
+.then(data=>{
+  const lines = data.split("\n");
+  for(let i=0;i<lines.length;i++){
+    if(lines[i].startsWith("#EXTINF")){
+      const name = lines[i].split(",")[1];
+      const groupMatch = lines[i].match(/group-title="(.*?)"/);
+      const group = groupMatch ? groupMatch[1] : "Otros";
+      const url = lines[i+1];
+      allChannels.push({name, group, url});
+    }
   }
+  filtered = allChannels;
+  buildCategories();
+  render();
+  play(0);
 });
 
-function loadTV(){
-  mode = "tv"; showFavs = false;
-  fetch(tvURL).then(r=>r.text()).then(data=>{
-    const lines=data.split("\n");
-    allItems=[];
-    lines.forEach((l,i)=>{
-      if(l.startsWith("#EXTINF")){
-        allItems.push({
-          name:l.split(",")[1],
-          country: (l.includes("country=") ? l.match(/country="(.*?)"/)[1] : "Otros"),
-          url:lines[i+1]
-        });
-      }
-    });
-    items = allItems;
-    buildCountries();
-    render(); play(0);
+function buildCategories(){
+  const groups = [...new Set(allChannels.map(c=>c.group))];
+  const sel = document.getElementById("category");
+  groups.forEach(g=>{
+    const opt = document.createElement("option");
+    opt.value = g;
+    opt.textContent = g;
+    sel.appendChild(opt);
   });
 }
 
-function loadRadio(){
-  mode="radio"; showFavs=false;
-  allItems = radiosRD;
-  items = allItems;
-  buildCountries();
-  render(); play(0);
-}
-
-function buildCountries(){
-  const countries=[...new Set(allItems.map(i=>i.country))];
-  const f=document.getElementById("filters");
-  f.innerHTML='<div class="filter active" onclick="filterCountry(\'ALL\')">🌍 Todos</div>';
-  countries.forEach(c=>{
-    const d=document.createElement("div");
-    d.className="filter";
-    d.innerText=c;
-    d.onclick=()=>filterCountry(c);
-    f.appendChild(d);
-  });
-}
-
-function filterCountry(c){
-  if(c==="ALL") items=allItems;
-  else items=allItems.filter(i=>i.country===c);
-  selected=0; render();
-}
-
-function toggleFavorites(){
-  showFavs=!showFavs;
-  if(showFavs) items=allItems.filter(i=>favorites.includes(i.name));
-  else items=allItems;
+function filterCategory(){
+  const cat = document.getElementById("category").value;
+  filtered = cat==="ALL" ? allChannels : allChannels.filter(c=>c.group===cat);
   render();
 }
 
 function render(){
-  const grid=document.getElementById("list");
+  const grid = document.getElementById("list");
   grid.innerHTML="";
-  items.forEach((it,i)=>{
-    const d=document.createElement("div");
-    d.className="card"+(i===selected?" active":"");
-    d.innerHTML = it.name + 
-      `<br><small>⭐ <span onclick="event.stopPropagation();toggleFav('${it.name}')">
-      ${favorites.includes(it.name)?"Quitar":"Agregar"}</span></small>`;
-    d.onclick=()=>play(i);
+  filtered.forEach((c,i)=>{
+    const d = document.createElement("div");
+    d.className = "card" + (i===currentIndex ? " active":"");
+    d.innerHTML = c.name + `<br><small onclick="event.stopPropagation();toggleFav('${c.name}')">
+      ${favorites.includes(c.name) ? "★ Quitar" : "☆ Favorito"}</small>`;
+    d.onclick = ()=>play(i);
     grid.appendChild(d);
   });
 }
 
 function play(i){
-  selected=i;
-  const v=document.getElementById("player");
-  const url=items[i].url;
-  if(mode==="tv" && Hls.isSupported()){
-    const hls=new Hls();
+  currentIndex = i;
+  const video = document.getElementById("player");
+  const url = filtered[i].url;
+
+  if(Hls.isSupported()){
+    const hls = new Hls();
     hls.loadSource(url);
-    hls.attachMedia(v);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play());
   } else {
-    v.src=url; v.play();
+    video.src = url;
+    video.play();
   }
-  document.getElementById("epg").innerText =
-    "📅 Programación de " + items[i].name + ": Noticias, Películas, Deportes (EPG básico).";
   render();
 }
 
 function toggleFav(name){
-  if(favorites.includes(name))
-    favorites=favorites.filter(n=>n!==name);
-  else favorites.push(name);
+  if(favorites.includes(name)){
+    favorites = favorites.filter(f=>f!==name);
+  } else {
+    favorites.push(name);
+  }
   localStorage.setItem("favorites", JSON.stringify(favorites));
   render();
 }
 
-// Buscador
-document.getElementById("search").addEventListener("input",function(){
-  const t=this.value.toLowerCase();
-  items=allItems.filter(x=>x.name.toLowerCase().includes(t));
-  selected=0; render();
+function showFavorites(){
+  filtered = allChannels.filter(c=>favorites.includes(c.name));
+  render();
+}
+
+document.getElementById("search").addEventListener("input", function(){
+  const t = this.value.toLowerCase();
+  filtered = allChannels.filter(c=>c.name.toLowerCase().includes(t));
+  render();
 });
 
-// Control remoto Android TV
-document.addEventListener("keydown",e=>{
-  if(e.key==="ArrowDown" && selected<items.length-1) play(selected+1);
-  if(e.key==="ArrowUp" && selected>0) play(selected-1);
-  if(e.key==="Enter") play(selected);
-});
+function castScreen(){
+  alert("Para transmitir a tu TV, usa 'Transmitir Pantalla' desde el menú de Android.");
+}
 </script>
 
 </body>
