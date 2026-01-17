@@ -7,111 +7,66 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <style>
-body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
-#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center}
-#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000}
-#player{width:100%;height:100%;object-fit:contain}
-#content{margin-top:235px;padding:10px}
-input,button{width:100%;background:#1c1c1c;color:white;border:none;padding:8px;border-radius:6px;margin-bottom:8px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-.channel{background:#1a1a1a;border-radius:6px;padding:6px;text-align:center}
-.channel img{width:100%;height:60px;object-fit:contain}
-.name{font-size:12px}
-.fav{font-size:18px}
+body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
+#playerBox { position:fixed; top:0; left:0; right:0; height:180px; background:black; }
+#player { width:100%; height:100%; object-fit:contain; }
+#list { margin-top:190px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:10px; }
+.channel { background:#1a1a1a; padding:6px; border-radius:6px; text-align:center; }
+.channel img { width:100%; height:60px; object-fit:contain; }
+.name { font-size:12px; }
 </style>
 </head>
 
 <body>
 
-<div id="header">📺 TV en Vivo VT</div>
-
-<div id="playerWrapper">
-  <video id="player" controls playsinline></video>
+<div id="playerBox">
+  <video id="player" controls autoplay></video>
 </div>
 
-<div id="content">
-
-<input id="search" placeholder="Buscar canal...">
-<button onclick="showFavorites()">⭐ Ver favoritos</button>
-
-<div class="grid" id="list"></div>
-
-</div>
+<div id="list"></div>
 
 <script>
-const IPTV_URL = "https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u";
-
-let channels = [];
-let filtered = [];
-let favorites = JSON.parse(localStorage.getItem("favs")||"[]");
+const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
 
 fetch(IPTV_URL)
-  .then(r=>r.text())
-  .then(parseM3U);
+  .then(r => r.text())
+  .then(text => {
+    const lines = text.split("\n");
+    const channels = [];
 
-function parseM3U(text){
-  const lines=text.split("\n");
-  for(let i=0;i<lines.length;i++){
-    if(lines[i].startsWith("#EXTINF")){
-      const name=lines[i].split(",")[1];
-      const logo=(lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://via.placeholder.com/150x80?text=TV";
-      const url=lines[i+1];
-      const id=btoa(name+url);
-      channels.push({id,name,logo,url});
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("#EXTINF")) {
+        const name = lines[i].split(",")[1];
+        const logo = (lines[i].match(/tvg-logo="(.*?)"/) || [])[1] || "";
+        const url = lines[i+1];
+        channels.push({name, logo, url});
+      }
     }
-  }
-  filtered=[...channels];
-  render();
-  play(0);
-}
 
-document.getElementById("search").oninput = e=>{
-  const t=e.target.value.toLowerCase();
-  filtered = channels.filter(c=>c.name.toLowerCase().includes(t));
-  render();
-};
+    const list = document.getElementById("list");
+    channels.forEach((c, i) => {
+      const div = document.createElement("div");
+      div.className = "channel";
+      div.innerHTML = `
+        <img src="${c.logo}">
+        <div class="name">${c.name}</div>
+      `;
+      div.onclick = () => play(c.url);
+      list.appendChild(div);
+    });
 
-function showFavorites(){
-  filtered = channels.filter(c=>favorites.includes(c.id));
-  render();
-}
-
-function render(){
-  const box=document.getElementById("list");
-  box.innerHTML="";
-  filtered.forEach((c,i)=>{
-    const d=document.createElement("div");
-    d.className="channel";
-    d.innerHTML=`
-      <img src="${c.logo}">
-      <div class="name">${c.name}</div>
-      <div class="fav" onclick="event.stopPropagation();toggleFav('${c.id}')">
-        ${favorites.includes(c.id)?"★":"☆"}
-      </div>
-    `;
-    d.onclick=()=>play(i);
-    box.appendChild(d);
+    if (channels.length > 0) play(channels[0].url);
   });
-}
 
-function play(i){
-  const v=document.getElementById("player");
-  const url=filtered[i].url;
-  if(Hls.isSupported()){
-    const hls=new Hls();
+function play(url) {
+  const video = document.getElementById("player");
+  if (Hls.isSupported()) {
+    const hls = new Hls();
     hls.loadSource(url);
-    hls.attachMedia(v);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
-  }else{
-    v.src=url;v.play();
+    hls.attachMedia(video);
+  } else {
+    video.src = url;
   }
-}
-
-function toggleFav(id){
-  if(favorites.includes(id)) favorites = favorites.filter(f=>f!==id);
-  else favorites.push(id);
-  localStorage.setItem("favs", JSON.stringify(favorites));
-  render();
 }
 </script>
 
