@@ -42,7 +42,7 @@ input, select, button { width:100%; margin-bottom:6px; padding:6px; border:none;
 <div id="list"></div>
 
 <script>
-const DEFAULT_IPTV = "lista.m3u";
+const DEFAULT_IPTV = "/tv-en-vivo/lista.m3u";
 let IPTV_URL = localStorage.getItem("iptv_url") || DEFAULT_IPTV;
 
 let channels = [];
@@ -162,7 +162,6 @@ function saveIPTV(){
     alert("Debe ser una lista .m3u");
     return;
   }
-  IPTV_URL = newUrl;
   localStorage.setItem("iptv_url", newUrl);
   location.reload();
 }
