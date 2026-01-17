@@ -2,8 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>TV Dominicana Live</title>
+<title>TV en Vivo VT</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <!-- Adsterra Banner -->
@@ -21,96 +22,137 @@ atOptions = {
 <style>
 body { margin:0; background:#000; color:white; font-family:Arial; }
 header {
-  position:sticky;
-  top:0;
-  background:#111;
-  text-align:center;
-  padding:10px;
-  font-size:20px;
-  z-index:10;
+  position:sticky; top:0; z-index:9999;
+  background:#111; padding:10px; text-align:center; font-size:20px;
 }
 #player { width:100%; height:300px; background:black; }
-#menu {
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  margin:10px;
+#topbar {
+  display:flex; justify-content:space-around; padding:8px; background:#1a1a1a;
 }
-.tab {
-  padding:10px 18px;
-  background:#e50914;
-  border-radius:20px;
-  cursor:pointer;
-}
-.tab.active { background:#ff3c3c; }
-#search {
-  width:95%;
-  margin:10px auto;
-  display:block;
-  padding:10px;
-  border-radius:20px;
-  border:none;
-}
+button { background:#e50914; color:white; border:none; padding:6px 12px; border-radius:6px; }
+#filters { display:flex; overflow-x:auto; gap:8px; padding:8px; }
+.filter { background:#333; padding:6px 10px; border-radius:12px; cursor:pointer; }
+.filter.active { background:#e50914; }
+#search { width:95%; margin:10px auto; display:block; padding:10px; border-radius:20px; border:none; }
 .grid {
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-  gap:10px;
-  padding:10px;
+  gap:10px; padding:10px;
 }
 .card {
-  background:#1a1a1a;
-  padding:10px;
-  border-radius:8px;
-  cursor:pointer;
-  text-align:center;
+  background:#1a1a1a; padding:10px; border-radius:8px; cursor:pointer;
 }
 .card.active { background:#333; }
-#ad { text-align:center; margin:10px; }
+#epg {
+  background:#111; padding:10px; font-size:14px; border-top:1px solid #333;
+}
 </style>
 </head>
 
 <body>
 
-<header>📺 TV Dominicana Live</header>
+<header>📺 TV en Vivo VT</header>
 
 <video id="player" controls autoplay></video>
 
-<div id="ad"></div>
-
-<div id="menu">
-  <div class="tab active" onclick="loadTV()">📡 TV</div>
-  <div class="tab" onclick="loadRadio()">📻 Radios RD</div>
+<div id="topbar">
+  <button onclick="toggleFavorites()">⭐ Favoritos</button>
+  <button onclick="loadTV()">📡 TV</button>
+  <button onclick="loadRadio()">📻 Radios RD</button>
 </div>
+
+<div id="filters"></div>
 
 <input type="text" id="search" placeholder="🔍 Buscar canal o radio...">
 
 <div class="grid" id="list"></div>
 
+<div id="epg">📅 Guía: Selecciona un canal para ver programación.</div>
+
 <script>
 const tvURL = "https://iptv-org.github.io/iptv/index.m3u";
+
+// Radios Dominicanas
 const radiosRD = [
-  {name:"Z101 FM", url:"https://stream.zeno.fm/7a1zq3zv7k8uv"},
-  {name:"La Mega 97.7", url:"https://stream.zeno.fm/8k6s8xg1d2zuv"},
-  {name:"Rumba 98.5", url:"https://stream.zeno.fm/0y1s7g1t2zuv"},
-  {name:"Caliente 104", url:"https://stream.zeno.fm/5h1s6g1t2zuv"},
-  {name:"CDN Radio", url:"https://stream.zeno.fm/1d1s6g1t2zuv"},
-  {name:"Radio Universal", url:"https://stream.zeno.fm/2e1s6g1t2zuv"}
+  {name:"Z101 FM", country:"RD", url:"https://stream.zeno.fm/7a1zq3zv7k8uv"},
+  {name:"La Mega 97.7", country:"RD", url:"https://stream.zeno.fm/8k6s8xg1d2zuv"},
+  {name:"Rumba 98.5", country:"RD", url:"https://stream.zeno.fm/0y1s7g1t2zuv"},
+  {name:"Caliente 104", country:"RD", url:"https://stream.zeno.fm/5h1s6g1t2zuv"},
+  {name:"CDN Radio", country:"RD", url:"https://stream.zeno.fm/1d1s6g1t2zuv"},
+  {name:"Radio Universal", country:"RD", url:"https://stream.zeno.fm/2e1s6g1t2zuv"}
 ];
 
+let allItems = [];
 let items = [];
 let selected = 0;
 let mode = "tv";
+let showFavs = false;
+let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 
-fetch(tvURL).then(r=>r.text()).then(data=>{
-  const lines=data.split("\n");
-  lines.forEach((l,i)=>{
-    if(l.startsWith("#EXTINF")){
-      items.push({name:l.split(",")[1], url:lines[i+1]});
-    }
-  });
-  render();
-  play(0);
+// Cargar TV por defecto
+loadTV();
+
+// Pantalla completa al rotar
+window.addEventListener("orientationchange", () => {
+  const v = document.getElementById("player");
+  if (screen.orientation.angle === 90 || screen.orientation.angle === 270) {
+    if (v.requestFullscreen) v.requestFullscreen();
+  }
 });
+
+function loadTV(){
+  mode = "tv"; showFavs = false;
+  fetch(tvURL).then(r=>r.text()).then(data=>{
+    const lines=data.split("\n");
+    allItems=[];
+    lines.forEach((l,i)=>{
+      if(l.startsWith("#EXTINF")){
+        allItems.push({
+          name:l.split(",")[1],
+          country: (l.includes("country=") ? l.match(/country="(.*?)"/)[1] : "Otros"),
+          url:lines[i+1]
+        });
+      }
+    });
+    items = allItems;
+    buildCountries();
+    render(); play(0);
+  });
+}
+
+function loadRadio(){
+  mode="radio"; showFavs=false;
+  allItems = radiosRD;
+  items = allItems;
+  buildCountries();
+  render(); play(0);
+}
+
+function buildCountries(){
+  const countries=[...new Set(allItems.map(i=>i.country))];
+  const f=document.getElementById("filters");
+  f.innerHTML='<div class="filter active" onclick="filterCountry(\'ALL\')">🌍 Todos</div>';
+  countries.forEach(c=>{
+    const d=document.createElement("div");
+    d.className="filter";
+    d.innerText=c;
+    d.onclick=()=>filterCountry(c);
+    f.appendChild(d);
+  });
+}
+
+function filterCountry(c){
+  if(c==="ALL") items=allItems;
+  else items=allItems.filter(i=>i.country===c);
+  selected=0; render();
+}
+
+function toggleFavorites(){
+  showFavs=!showFavs;
+  if(showFavs) items=allItems.filter(i=>favorites.includes(i.name));
+  else items=allItems;
+  render();
+}
 
 function render(){
   const grid=document.getElementById("list");
@@ -118,7 +160,9 @@ function render(){
   items.forEach((it,i)=>{
     const d=document.createElement("div");
     d.className="card"+(i===selected?" active":"");
-    d.innerText=it.name;
+    d.innerHTML = it.name + 
+      `<br><small>⭐ <span onclick="event.stopPropagation();toggleFav('${it.name}')">
+      ${favorites.includes(it.name)?"Quitar":"Agregar"}</span></small>`;
     d.onclick=()=>play(i);
     grid.appendChild(d);
   });
@@ -134,40 +178,29 @@ function play(i){
     hls.attachMedia(v);
     hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
   } else {
-    v.src=url;
-    v.play();
+    v.src=url; v.play();
   }
+  document.getElementById("epg").innerText =
+    "📅 Programación de " + items[i].name + ": Noticias, Películas, Deportes (EPG básico).";
   render();
 }
 
-function loadTV(){
-  mode="tv";
-  items=[];
-  fetch(tvURL).then(r=>r.text()).then(data=>{
-    const lines=data.split("\n");
-    lines.forEach((l,i)=>{
-      if(l.startsWith("#EXTINF")){
-        items.push({name:l.split(",")[1], url:lines[i+1]});
-      }
-    });
-    render(); play(0);
-  });
-}
-
-function loadRadio(){
-  mode="radio";
-  items=radiosRD;
-  render(); play(0);
+function toggleFav(name){
+  if(favorites.includes(name))
+    favorites=favorites.filter(n=>n!==name);
+  else favorites.push(name);
+  localStorage.setItem("favorites", JSON.stringify(favorites));
+  render();
 }
 
 // Buscador
 document.getElementById("search").addEventListener("input",function(){
   const t=this.value.toLowerCase();
-  const f=items.filter(x=>x.name.toLowerCase().includes(t));
-  items=f; selected=0; render();
+  items=allItems.filter(x=>x.name.toLowerCase().includes(t));
+  selected=0; render();
 });
 
-// Control remoto
+// Control remoto Android TV
 document.addEventListener("keydown",e=>{
   if(e.key==="ArrowDown" && selected<items.length-1) play(selected+1);
   if(e.key==="ArrowUp" && selected>0) play(selected-1);
