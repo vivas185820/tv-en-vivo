@@ -36,7 +36,7 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 <button onclick="toggleSettings()">⚙ Ajustes IPTV</button>
 
 <div id="settings">
-  <input id="iptvUrl">
+  <input id="iptvUrl" placeholder="Pega tu lista IPTV (.m3u)">
   <button onclick="saveIPTV()">Guardar lista</button>
 </div>
 
@@ -49,19 +49,19 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 
 <script>
 let IPTV_URL = localStorage.getItem("iptv_url") || 
-"https://cors.isomorphic-git.org/https://iptv-org.github.io/iptv/languages/spa.m3u";
+"https://api.allorigins.win/raw?url=https://iptv-org.github.io/iptv/languages/spa.m3u";
 
 let all=[], view=[], favs=JSON.parse(localStorage.getItem("favs")||"[]");
 
 function toggleSettings(){
   document.getElementById("settings").style.display="block";
-  document.getElementById("iptvUrl").value = IPTV_URL.replace("https://cors.isomorphic-git.org/","");
+  document.getElementById("iptvUrl").value = IPTV_URL.replace("https://api.allorigins.win/raw?url=","");
 }
 
 function saveIPTV(){
   let url = document.getElementById("iptvUrl").value.trim();
   if(!url.startsWith("http")) return alert("URL inválida");
-  IPTV_URL = "https://cors.isomorphic-git.org/" + url;
+  IPTV_URL = "https://api.allorigins.win/raw?url=" + url;
   localStorage.setItem("iptv_url", IPTV_URL);
   location.reload();
 }
@@ -74,6 +74,7 @@ async function load(){
     initUI();
   }catch(e){
     document.getElementById("status").innerHTML="❌ Error cargando la lista IPTV";
+    console.error(e);
   }
 }
 
