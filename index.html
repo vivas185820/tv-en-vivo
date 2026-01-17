@@ -11,13 +11,14 @@ body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
 #playerBox { position:fixed; top:0; left:0; right:0; height:180px; background:black; }
 #player { width:100%; height:100%; object-fit:contain; }
 #controls { margin-top:190px; padding:10px; }
-#list { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+#list { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:10px; }
 .channel { background:#1a1a1a; padding:6px; border-radius:6px; text-align:center; position:relative; }
 .channel img { width:100%; height:60px; object-fit:contain; }
 .name { font-size:12px; }
 .star { position:absolute; top:5px; right:5px; font-size:18px; cursor:pointer; }
 input, select, button { width:100%; margin-bottom:6px; padding:6px; border:none; border-radius:5px; background:#1c1c1c; color:white; }
 #settings { display:none; }
+#status { text-align:center; padding:10px; }
 </style>
 </head>
 
@@ -34,25 +35,43 @@ input, select, button { width:100%; margin-bottom:6px; padding:6px; border:none;
   <button onclick="toggleSettings()">⚙ Ajustes IPTV</button>
 
   <div id="settings">
-    <input id="iptvUrl">
+    <input id="iptvUrl" placeholder="Pega tu lista M3U">
     <button onclick="saveIPTV()">Guardar lista</button>
   </div>
+
+  <div id="status">Cargando canales...</div>
 </div>
 
 <div id="list"></div>
 
 <script>
-let IPTV_URL = localStorage.getItem("iptv_url") || "https://iptv-org.github.io/iptv/languages/spa.m3u";
+const DEFAULT_IPTV = "https://iptv-org.github.io/iptv/languages/spa.m3u";
+let IPTV_URL = localStorage.getItem("iptv_url") || DEFAULT_IPTV;
+
 let channels = [];
 let filtered = [];
 let favorites = JSON.parse(localStorage.getItem("favs") || "[]");
 
-fetch(IPTV_URL)
-  .then(r => r.text())
-  .then(parseM3U);
+loadIPTV(IPTV_URL);
+
+function loadIPTV(url){
+  fetch(url)
+    .then(r => r.text())
+    .then(parseM3U)
+    .catch(() => {
+      if(url !== DEFAULT_IPTV){
+        localStorage.removeItem("iptv_url");
+        loadIPTV(DEFAULT_IPTV);
+      } else {
+        document.getElementById("status").innerText = "No se pudo cargar la lista IPTV.";
+      }
+    });
+}
 
 function parseM3U(text){
   const lines = text.split("\n");
+  channels = [];
+
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith("#EXTINF")){
       const name = lines[i].split(",")[1];
@@ -63,10 +82,12 @@ function parseM3U(text){
       channels.push({id, name, logo, group, url});
     }
   }
+
   filtered = channels;
   buildCategories();
   render();
-  play(channels[0].url);
+  document.getElementById("status").innerText = "";
+  if(channels.length > 0) play(channels[0].url);
 }
 
 function buildCategories(){
@@ -122,7 +143,7 @@ function play(url){
     const hls = new Hls();
     hls.loadSource(url);
     hls.attachMedia(video);
-  }else{
+  } else {
     video.src = url;
   }
 }
@@ -130,7 +151,7 @@ function play(url){
 function toggleFav(id){
   if(favorites.includes(id)){
     favorites = favorites.filter(f => f !== id);
-  }else{
+  } else {
     favorites.push(id);
   }
   localStorage.setItem("favs", JSON.stringify(favorites));
@@ -144,8 +165,12 @@ function toggleSettings(){
 }
 
 function saveIPTV(){
-  IPTV_URL = document.getElementById("iptvUrl").value.trim();
-  localStorage.setItem("iptv_url", IPTV_URL);
+  const newUrl = document.getElementById("iptvUrl").value.trim();
+  if(newUrl.length < 10){
+    alert("URL inválida");
+    return;
+  }
+  localStorage.setItem("iptv_url", newUrl);
   location.reload();
 }
 </script>
