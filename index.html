@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>TV en Vivo VT</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
@@ -22,18 +22,18 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 45px;
+  height: 44px;
   background: #111;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  font-size: 18px;
+  font-size: 17px;
 }
 
-#player-container {
+#playerWrapper {
   position: fixed;
-  top: 45px;
+  top: 44px;
   left: 0;
   right: 0;
   height: 180px;
@@ -45,17 +45,18 @@ body {
   width: 100%;
   height: 100%;
   background: #000;
+  object-fit: contain;
 }
 
-#main {
-  margin-top: 235px;
+#content {
+  margin-top: 230px;
   padding: 10px;
 }
 
 .controls {
   display: flex;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .controls select,
@@ -64,13 +65,14 @@ body {
   background: #1c1c1c;
   color: #fff;
   border: none;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 5px;
+  font-size: 13px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 
@@ -79,7 +81,6 @@ body {
   border-radius: 6px;
   padding: 6px;
   text-align: center;
-  cursor: pointer;
 }
 
 .channel img {
@@ -89,17 +90,13 @@ body {
 }
 
 .channel-name {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 4px;
 }
 
 .fav {
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
-}
-
-.active {
-  outline: 2px solid #e50914;
 }
 </style>
 </head>
@@ -108,11 +105,11 @@ body {
 
 <div id="header">📺 TV en Vivo VT</div>
 
-<div id="player-container">
-  <video id="player" controls autoplay></video>
+<div id="playerWrapper">
+  <video id="player" controls playsinline webkit-playsinline></video>
 </div>
 
-<div id="main">
+<div id="content">
 
   <div class="controls">
     <select id="category"></select>
@@ -130,14 +127,14 @@ const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
 let allChannels = [];
 let visibleChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
-let currentIndex = 0;
 
 fetch(IPTV_URL)
-  .then(res => res.text())
-  .then(text => parseM3U(text));
+  .then(r => r.text())
+  .then(data => parseM3U(data));
 
-function parseM3U(data) {
-  const lines = data.split("\n");
+function parseM3U(text) {
+  const lines = text.split("\n");
+
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].startsWith("#EXTINF")) {
       const name = lines[i].split(",")[1];
@@ -157,17 +154,20 @@ function parseM3U(data) {
 function buildCategories() {
   const cat = document.getElementById("category");
   const groups = ["Todos", ...new Set(allChannels.map(c => c.group))];
+
   cat.innerHTML = "";
   groups.forEach(g => {
-    const opt = document.createElement("option");
-    opt.value = g;
-    opt.textContent = g;
-    cat.appendChild(opt);
+    const o = document.createElement("option");
+    o.value = g;
+    o.textContent = g;
+    cat.appendChild(o);
   });
 
   cat.onchange = () => {
     const val = cat.value;
-    visibleChannels = val === "Todos" ? allChannels : allChannels.filter(c => c.group === val);
+    visibleChannels = val === "Todos"
+      ? allChannels
+      : allChannels.filter(c => c.group === val);
     render();
   };
 }
@@ -189,7 +189,7 @@ function render() {
 
   visibleChannels.forEach((ch, i) => {
     const div = document.createElement("div");
-    div.className = "channel" + (i === currentIndex ? " active" : "");
+    div.className = "channel";
 
     const img = document.createElement("img");
     img.src = ch.logo;
@@ -216,7 +216,6 @@ function render() {
 }
 
 function play(index) {
-  currentIndex = index;
   const video = document.getElementById("player");
   const url = visibleChannels[index].url;
 
@@ -229,8 +228,6 @@ function play(index) {
     video.src = url;
     video.play();
   }
-
-  render();
 }
 
 function toggleFavorite(name) {
