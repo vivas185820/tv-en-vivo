@@ -9,24 +9,46 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
-#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center;z-index:1000}
+#header{
+  position:fixed;top:0;left:0;right:0;height:44px;
+  background:#111;display:flex;align-items:center;justify-content:center;
+  z-index:1000;font-size:16px
+}
+#settingsBtn{
+  position:absolute;right:10px;background:none;border:none;
+  color:white;font-size:18px
+}
 #playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000;z-index:999}
 #player{width:100%;height:100%;object-fit:contain}
 #content{margin-top:235px;padding:10px}
 .section-title{font-size:14px;margin:8px 0 4px}
-select,input,button{width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;border:none;padding:6px;border-radius:5px}
+select,input,button{
+  width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;
+  border:none;padding:6px;border-radius:5px
+}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .channel{background:#1a1a1a;border-radius:6px;padding:6px;text-align:center}
 .channel img{width:100%;height:60px;object-fit:contain}
 .channel-name{font-size:12px;margin-top:4px}
-.fav{font-size:18px}
+.fav{font-size:18px;cursor:pointer}
 #loader{text-align:center;margin:20px;font-size:14px}
+#settingsModal{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.8);z-index:2000
+}
+#settingsBox{
+  background:#111;margin:50px auto;padding:15px;border-radius:10px;
+  width:90%;max-width:400px
+}
 </style>
 </head>
 
 <body>
 
-<div id="header">📺 TV en Vivo VT</div>
+<div id="header">
+  📺 TV en Vivo VT
+  <button id="settingsBtn">⚙️</button>
+</div>
 
 <div id="playerWrapper">
   <video id="player" controls playsinline></video>
@@ -48,10 +70,22 @@ select,input,button{width:100%;margin-bottom:6px;background:#1c1c1c;color:#fff;b
 
 </div>
 
+<!-- Ventana de Ajustes -->
+<div id="settingsModal">
+  <div id="settingsBox">
+    <h3>⚙️ Ajustes IPTV</h3>
+    <input id="iptvInput" placeholder="Pega aquí tu URL M3U">
+    <button onclick="saveIPTV()">Guardar</button>
+    <button onclick="closeSettings()" style="background:#333">Cerrar</button>
+  </div>
+</div>
+
 <script>
-const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
+let IPTV_URL = localStorage.getItem("custom_iptv_url") ||
+"https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u";
+
 const CACHE_KEY = "iptv_cache_spa";
-const CACHE_TIME = 1000*60*60*24; // 24 horas
+const CACHE_TIME = 1000*60*60*24;
 const PAGE_SIZE = 40;
 
 let allChannels = [];
@@ -59,17 +93,40 @@ let visibleChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites_vt")||"[]");
 let page = 0;
 
+document.getElementById("settingsBtn").onclick = () => {
+  document.getElementById("iptvInput").value = IPTV_URL;
+  document.getElementById("settingsModal").style.display = "block";
+};
+
+function closeSettings(){
+  document.getElementById("settingsModal").style.display = "none";
+}
+
+function saveIPTV(){
+  const url = document.getElementById("iptvInput").value.trim();
+  if(!url.endsWith(".m3u") && !url.endsWith(".m3u8")){
+    alert("URL inválida");
+    return;
+  }
+  localStorage.setItem("custom_iptv_url", url);
+  location.reload();
+}
+
 async function loadList(){
-  const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
-  if(cached && (Date.now()-cached.time)<CACHE_TIME){
-    allChannels = cached.data;
-    initUI();
-  }else{
+  try{
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
+    if(cached && (Date.now()-cached.time)<CACHE_TIME){
+      allChannels = cached.data;
+      initUI();
+      return;
+    }
     const res = await fetch(IPTV_URL);
     const text = await res.text();
     allChannels = parseM3U(text);
     localStorage.setItem(CACHE_KEY, JSON.stringify({time:Date.now(), data:allChannels}));
     initUI();
+  }catch(e){
+    document.getElementById("loader").innerHTML = "❌ Error cargando la lista.";
   }
 }
 
