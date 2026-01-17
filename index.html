@@ -10,14 +10,12 @@
 body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
 #playerBox { position:fixed; top:0; left:0; right:0; height:180px; background:black; }
 #player { width:100%; height:100%; object-fit:contain; }
-#controls { margin-top:190px; padding:10px; }
-#search { width:100%; padding:8px; border:none; border-radius:5px; background:#1c1c1c; color:white; margin-bottom:6px; }
-#favBtn { width:100%; padding:8px; border:none; border-radius:5px; background:#333; color:white; margin-bottom:10px; }
-#list { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+#list { margin-top:190px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:10px; }
 .channel { background:#1a1a1a; padding:6px; border-radius:6px; text-align:center; position:relative; }
 .channel img { width:100%; height:60px; object-fit:contain; }
 .name { font-size:12px; }
 .star { position:absolute; top:5px; right:5px; font-size:18px; cursor:pointer; }
+#favBtn { width:100%; padding:8px; background:#333; border:none; color:white; border-radius:5px; margin-bottom:10px; }
 </style>
 </head>
 
@@ -27,17 +25,13 @@ body { margin:0; background:#0b0b0b; color:white; font-family:Arial; }
   <video id="player" controls autoplay></video>
 </div>
 
-<div id="controls">
-  <input id="search" placeholder="Buscar canal...">
-  <button id="favBtn">⭐ Ver favoritos</button>
-</div>
+<button id="favBtn">⭐ Ver favoritos</button>
 
 <div id="list"></div>
 
 <script>
 const IPTV_URL = "https://iptv-org.github.io/iptv/languages/spa.m3u";
 let allChannels = [];
-let currentList = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 
 fetch(IPTV_URL)
@@ -50,13 +44,11 @@ fetch(IPTV_URL)
         const name = lines[i].split(",")[1];
         const logo = (lines[i].match(/tvg-logo="(.*?)"/) || [])[1] || "";
         const url = lines[i+1];
-        const id = btoa(name + url);
-        allChannels.push({id, name, logo, url});
+        allChannels.push({name, logo, url});
       }
     }
 
-    currentList = allChannels;
-    render(currentList);
+    render(allChannels);
     if (allChannels.length > 0) play(allChannels[0].url);
   })
   .catch(() => alert("No se pudo cargar la lista"));
@@ -67,38 +59,36 @@ function render(list){
   list.forEach(c => {
     const div = document.createElement("div");
     div.className = "channel";
+
+    const isFav = favorites.includes(c.name);
+
     div.innerHTML = `
-      <div class="star" onclick="event.stopPropagation();toggleFav('${c.id}')">
-        ${favorites.includes(c.id) ? "★" : "☆"}
+      <div class="star" onclick="event.stopPropagation();toggleFav('${c.name.replace(/'/g,"")}')">
+        ${isFav ? "★" : "☆"}
       </div>
       <img src="${c.logo}">
       <div class="name">${c.name}</div>
     `;
+
     div.onclick = () => play(c.url);
     box.appendChild(div);
   });
 }
 
-document.getElementById("search").oninput = function(){
-  const text = this.value.toLowerCase();
-  currentList = allChannels.filter(c => c.name.toLowerCase().includes(text));
-  render(currentList);
-};
-
-document.getElementById("favBtn").onclick = function(){
-  currentList = allChannels.filter(c => favorites.includes(c.id));
-  render(currentList);
-};
-
-function toggleFav(id){
-  if(favorites.includes(id)){
-    favorites = favorites.filter(f => f !== id);
+function toggleFav(name){
+  if(favorites.includes(name)){
+    favorites = favorites.filter(f => f !== name);
   } else {
-    favorites.push(id);
+    favorites.push(name);
   }
   localStorage.setItem("favorites", JSON.stringify(favorites));
-  render(currentList);
+  render(allChannels);
 }
+
+document.getElementById("favBtn").onclick = function(){
+  const favList = allChannels.filter(c => favorites.includes(c.name));
+  render(favList);
+};
 
 function play(url) {
   const video = document.getElementById("player");
@@ -113,4 +103,4 @@ function play(url) {
 </script>
 
 </body>
-</html> 
+</html>
