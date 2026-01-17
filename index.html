@@ -5,20 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TV en Vivo VT</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
 <style>
 body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
 #header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center}
 #playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000}
 #player{width:100%;height:100%;object-fit:contain}
 #content{margin-top:235px;padding:10px}
-.section{margin-bottom:8px}
-select,input,button{width:100%;background:#1c1c1c;color:white;border:none;padding:6px;border-radius:5px;margin-top:4px}
+button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding:8px;border-radius:6px;margin-bottom:8px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .channel{background:#1a1a1a;border-radius:6px;padding:6px;text-align:center}
 .channel img{width:100%;height:60px;object-fit:contain}
 .name{font-size:12px}
 .fav{font-size:18px}
+#status{text-align:center;margin:15px}
 </style>
 </head>
 
@@ -31,80 +30,92 @@ select,input,button{width:100%;background:#1c1c1c;color:white;border:none;paddin
 </div>
 
 <div id="content">
-
-<div class="section">
 <button onclick="showFavorites()">⭐ Ver favoritos</button>
-</div>
-
-<div class="section">
 <button onclick="toggleSettings()">⚙ Ajustes IPTV</button>
+
 <div id="settings" style="display:none">
-<input id="iptvUrl">
-<button onclick="saveIPTV()">Guardar</button>
-</div>
+  <input id="iptvUrl">
+  <button onclick="saveIPTV()">Guardar</button>
 </div>
 
-<div class="section">
 <select id="category"></select>
-</div>
-
-<div class="section">
 <input id="search" placeholder="Buscar canal...">
-</div>
 
+<div id="status">⏳ Cargando canales…</div>
 <div class="grid" id="list"></div>
-
 </div>
 
 <script>
-let IPTV_URL = localStorage.getItem("iptv_url") || https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u;
+let IPTV_URL = localStorage.getItem("iptv_url") || 
+"https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u";
+
 let all=[], view=[], favs=JSON.parse(localStorage.getItem("favs")||"[]");
 
 function toggleSettings(){
-  document.getElementById("settings").style.display = "block";
+  document.getElementById("settings").style.display="block";
   document.getElementById("iptvUrl").value = IPTV_URL;
 }
 
 function saveIPTV(){
-  IPTV_URL = document.getElementById("iptvUrl").value;
+  IPTV_URL = document.getElementById("iptvUrl").value.trim();
   localStorage.setItem("iptv_url", IPTV_URL);
   location.reload();
 }
 
-fetch(IPTV_URL).then(r=>r.text()).then(text=>{
+async function load(){
+  try{
+    const controller = new AbortController();
+    setTimeout(()=>controller.abort(),15000);
+
+    const res = await fetch(IPTV_URL,{signal:controller.signal});
+    const text = await res.text();
+
+    parse(text);
+    initUI();
+  }catch(e){
+    document.getElementById("status").innerHTML="❌ No se pudo cargar la lista IPTV";
+    console.error(e);
+  }
+}
+
+function parse(text){
   const lines=text.split("\n");
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith("#EXTINF")){
-      const name=lines[i].split(",")[1];
+      const name=lines[i].split(",")[1]||"Canal";
       const logo=(lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://via.placeholder.com/150x80?text=TV";
       const group=(lines[i].match(/group-title="(.*?)"/)||[])[1]||"Otros";
       const url=lines[i+1];
-      all.push({name,logo,group,url,id:btoa(name+url)});
+      const id=btoa(name+url);
+      all.push({id,name,logo,group,url});
     }
   }
-  view=[...all];
-  loadCategories();
-  render();
-  play(0);
-});
-
-function loadCategories(){
-  const sel=document.getElementById("category");
-  const cats=["Todos",...new Set(all.map(c=>c.group))];
-  cats.forEach(c=>{
-    const o=document.createElement("option");
-    o.value=c; o.textContent=c;
-    sel.appendChild(o);
-  });
-  sel.onchange=()=>filter();
 }
 
-document.getElementById("search").oninput=()=>filter();
+function initUI(){
+  document.getElementById("status").style.display="none";
+  view=[...all];
+  buildCategories();
+  render();
+  if(view.length>0) play(0);
+}
+
+function buildCategories(){
+  const sel=document.getElementById("category");
+  const cats=["Todos",...new Set(all.map(c=>c.group))];
+  sel.innerHTML="";
+  cats.forEach(c=>{
+    const o=document.createElement("option");
+    o.value=c;o.textContent=c;sel.appendChild(o);
+  });
+  sel.onchange=filter;
+}
+
+document.getElementById("search").oninput=filter;
 
 function filter(){
   const t=document.getElementById("search").value.toLowerCase();
   const cat=document.getElementById("category").value;
-
   view = all.filter(c=>{
     return (cat==="Todos"||c.group===cat) && c.name.toLowerCase().includes(t);
   });
@@ -123,9 +134,11 @@ function render(){
     const d=document.createElement("div");
     d.className="channel";
     d.innerHTML=`
-      <img src="${c.logo}">
+      <img loading="lazy" src="${c.logo}">
       <div class="name">${c.name}</div>
-      <div class="fav" onclick="event.stopPropagation();toggleFav('${c.id}')">${favs.includes(c.id)?"★":"☆"}</div>
+      <div class="fav" onclick="event.stopPropagation();toggleFav('${c.id}')">
+        ${favs.includes(c.id)?"★":"☆"}
+      </div>
     `;
     d.onclick=()=>play(i);
     box.appendChild(d);
@@ -141,7 +154,7 @@ function play(i){
     hls.attachMedia(v);
     hls.on(Hls.Events.MANIFEST_PARSED,()=>v.play());
   }else{
-    v.src=url; v.play();
+    v.src=url;v.play();
   }
 }
 
@@ -151,6 +164,8 @@ function toggleFav(id){
   localStorage.setItem("favs",JSON.stringify(favs));
   render();
 }
+
+load();
 </script>
 
 </body>
