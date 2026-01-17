@@ -8,8 +8,8 @@
 
 <style>
 body{margin:0;background:#0b0b0b;color:#fff;font-family:Arial}
-#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center}
-#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000}
+#header{position:fixed;top:0;left:0;right:0;height:44px;background:#111;display:flex;align-items:center;justify-content:center;z-index:10}
+#playerWrapper{position:fixed;top:44px;left:0;right:0;height:180px;background:#000;z-index:9}
 #player{width:100%;height:100%;object-fit:contain}
 #content{margin-top:235px;padding:10px}
 button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding:8px;border-radius:6px;margin-bottom:8px}
@@ -48,20 +48,20 @@ button,select,input{width:100%;background:#1c1c1c;color:#fff;border:none;padding
 </div>
 
 <script>
-let IPTV_URL = localStorage.getItem("iptv_url") || 
-"https://api.allorigins.win/raw?url=https://iptv-org.github.io/iptv/languages/spa.m3u";
+let IPTV_URL = localStorage.getItem("iptv_url") ||
+"https://raw.githubusercontent.com/iptv-org/iptv/master/languages/spa.m3u";
 
 let all=[], view=[], favs=JSON.parse(localStorage.getItem("favs")||"[]");
 
 function toggleSettings(){
   document.getElementById("settings").style.display="block";
-  document.getElementById("iptvUrl").value = IPTV_URL.replace("https://api.allorigins.win/raw?url=","");
+  document.getElementById("iptvUrl").value = IPTV_URL;
 }
 
 function saveIPTV(){
   let url = document.getElementById("iptvUrl").value.trim();
   if(!url.startsWith("http")) return alert("URL inválida");
-  IPTV_URL = "https://api.allorigins.win/raw?url=" + url;
+  IPTV_URL = url;
   localStorage.setItem("iptv_url", IPTV_URL);
   location.reload();
 }
@@ -73,7 +73,7 @@ async function load(){
     parse(text);
     initUI();
   }catch(e){
-    document.getElementById("status").innerHTML="❌ Error cargando la lista IPTV";
+    document.getElementById("status").innerHTML="❌ No se pudo cargar la lista IPTV";
     console.error(e);
   }
 }
