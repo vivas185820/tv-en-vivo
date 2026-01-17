@@ -8,34 +8,50 @@
 
 <style>
 body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
-#topbar {
+#top {
   position:fixed; top:0; left:0; right:0;
   background:#111; z-index:1000; padding:8px;
-  display:flex; justify-content:space-between; align-items:center;
+  text-align:center; font-size:18px;
 }
-#player {
-  width:100%; height:260px; background:black;
+#playerBox {
+  position:fixed; top:40px; left:0; right:0;
+  background:black; z-index:999;
 }
-#controls button {
-  background:#1f1f1f; color:#fff; border:none; padding:6px 10px; border-radius:4px; cursor:pointer;
+#player { width:100%; height:240px; }
+#content {
+  margin-top:290px;
+  padding:10px;
 }
-#content { margin-top:300px; padding:10px; }
-#filters, #search { margin:8px 0; }
-#filters select, #search input { width:100%; padding:8px; border-radius:6px; border:none; }
+#bar {
+  display:flex; gap:6px; margin-bottom:10px;
+}
+#bar select, #bar input, #bar button {
+  background:#1a1a1a; color:white; border:none; padding:6px;
+  border-radius:6px;
+}
 .grid {
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
   gap:10px;
 }
 .card {
-  background:#1a1a1a; padding:10px; border-radius:6px; cursor:pointer;
+  background:#1a1a1a;
+  border-radius:6px;
+  padding:6px;
+  text-align:center;
+  cursor:pointer;
 }
+.card img {
+  width:100%;
+  height:70px;
+  object-fit:contain;
+}
+.card small { font-size:11px; }
 .card.active { background:#333; }
-.small { font-size:12px; color:#bbb; }
-
 #settings {
   position:fixed; top:0; left:0; right:0; bottom:0;
-  background:rgba(0,0,0,0.9); display:none; z-index:2000;
+  background:rgba(0,0,0,0.9);
+  display:none; z-index:2000;
   align-items:center; justify-content:center;
 }
 #settingsBox {
@@ -46,48 +62,41 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
 
 <body>
 
-<div id="topbar">
-  <div>📺 TV en Vivo VT</div>
-  <div id="controls">
-    <button onclick="openSettings()">⚙ Ajustes</button>
-    <button onclick="showFavorites()">⭐ Favoritos</button>
-  </div>
+<div id="top">📺 TV en Vivo VT</div>
+
+<div id="playerBox">
+  <video id="player" controls autoplay></video>
 </div>
 
-<video id="player" controls autoplay></video>
-
 <div id="content">
-  <div id="filters">
+  <div id="bar">
     <select id="category" onchange="filterCategory()">
-      <option value="ALL">Todas las categorías</option>
+      <option value="ALL">Todas</option>
     </select>
-  </div>
-
-  <div id="search">
-    <input type="text" placeholder="Buscar canal..." oninput="search(this.value)">
+    <input type="text" placeholder="Buscar..." oninput="search(this.value)">
+    <button onclick="showFavorites()">⭐</button>
+    <button onclick="openSettings()">⚙</button>
   </div>
 
   <div class="grid" id="list"></div>
 </div>
 
-<!-- Ajustes -->
 <div id="settings">
   <div id="settingsBox">
-    <h3>⚙ Ajustes IPTV</h3>
-    <label>URL de la lista M3U:</label>
-    <input type="text" id="iptvUrl" style="width:100%;padding:8px;margin:10px 0;">
-    <button onclick="saveSettings()">Guardar y recargar</button>
+    <h3>Ajustes IPTV</h3>
+    <input id="iptvUrl" style="width:100%;padding:8px" />
+    <br><br>
+    <button onclick="saveSettings()">Guardar</button>
     <button onclick="closeSettings()">Cerrar</button>
   </div>
 </div>
 
 <script>
 let IPTV_URL = localStorage.getItem("iptv_url") || "https://iptv-org.github.io/iptv/index.nsfw.m3u";
-let all = [], filtered = [], favorites = JSON.parse(localStorage.getItem("favorites")||"[]");
-let current = 0;
+let all=[], filtered=[], favorites=JSON.parse(localStorage.getItem("favorites")||"[]");
+let current=0;
 
 document.getElementById("iptvUrl").value = IPTV_URL;
-
 loadIPTV();
 
 function loadIPTV(){
@@ -98,8 +107,9 @@ function loadIPTV(){
       if(lines[i].startsWith("#EXTINF")){
         const name=lines[i].split(",")[1];
         const group=(lines[i].match(/group-title="(.*?)"/)||[])[1]||"Otros";
+        const logo=(lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://via.placeholder.com/150x80?text=TV";
         const url=lines[i+1];
-        all.push({name,group,url});
+        all.push({name,group,logo,url});
       }
     }
     filtered=all;
@@ -111,7 +121,7 @@ function loadIPTV(){
 
 function buildCategories(){
   const sel=document.getElementById("category");
-  sel.innerHTML='<option value="ALL">Todas las categorías</option>';
+  sel.innerHTML='<option value="ALL">Todas</option>';
   [...new Set(all.map(c=>c.group))].forEach(g=>{
     const o=document.createElement("option");
     o.value=g; o.textContent=g;
@@ -137,11 +147,12 @@ function render(){
   filtered.forEach((c,i)=>{
     const d=document.createElement("div");
     d.className="card"+(i===current?" active":"");
-    d.innerHTML = `<strong>${c.name}</strong><br>
-      <span class="small">${c.group}</span><br>
-      <span class="small" onclick="event.stopPropagation();toggleFav('${c.name}')">
-        ${favorites.includes(c.name)?"★ Quitar":"☆ Favorito"}
-      </span>`;
+    d.innerHTML = `
+      <img src="${c.logo}">
+      <small>${c.name}</small><br>
+      <small onclick="event.stopPropagation();toggleFav('${c.name}')">
+        ${favorites.includes(c.name)?"★":"☆"}
+      </small>`;
     d.onclick=()=>play(i);
     grid.appendChild(d);
   });
@@ -174,7 +185,6 @@ function showFavorites(){
   render();
 }
 
-// Ajustes
 function openSettings(){ document.getElementById("settings").style.display="flex"; }
 function closeSettings(){ document.getElementById("settings").style.display="none"; }
 function saveSettings(){
