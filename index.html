@@ -15,19 +15,24 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
 }
 #playerBox {
   position:fixed; top:40px; left:0; right:0;
-  background:black; z-index:999;
+  height:180px; background:black; z-index:999;
+  border-bottom:2px solid #1a1a1a;
 }
-#player { width:100%; height:240px; }
-#content {
-  margin-top:290px;
-  padding:10px;
+#player {
+  width:100%; height:180px; object-fit:contain; background:#000;
 }
-#bar {
-  display:flex; gap:6px; margin-bottom:10px;
+#playerControls {
+  position:absolute; bottom:5px; right:5px;
 }
+#playerControls button {
+  background:#e50914; border:none; color:white;
+  padding:4px 8px; border-radius:4px; margin-left:4px;
+}
+#content { margin-top:230px; padding:10px; }
+#bar { display:flex; gap:6px; margin-bottom:10px; }
 #bar select, #bar input, #bar button {
-  background:#1a1a1a; color:white; border:none; padding:6px;
-  border-radius:6px;
+  background:#1a1a1a; color:white; border:none;
+  padding:6px; border-radius:6px;
 }
 .grid {
   display:grid;
@@ -41,21 +46,17 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
   text-align:center;
   cursor:pointer;
 }
-.card img {
-  width:100%;
-  height:70px;
-  object-fit:contain;
-}
-.card small { font-size:11px; }
+.card img { width:100%; height:70px; object-fit:contain; }
+.card small { font-size:11px; display:block; }
 .card.active { background:#333; }
+
 #settings {
-  position:fixed; top:0; left:0; right:0; bottom:0;
-  background:rgba(0,0,0,0.9);
-  display:none; z-index:2000;
-  align-items:center; justify-content:center;
+  position:fixed; inset:0; background:rgba(0,0,0,.9);
+  display:none; z-index:2000; align-items:center; justify-content:center;
 }
 #settingsBox {
-  background:#111; padding:20px; border-radius:8px; width:90%; max-width:400px;
+  background:#111; padding:20px; border-radius:8px;
+  width:90%; max-width:400px;
 }
 </style>
 </head>
@@ -66,13 +67,15 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
 
 <div id="playerBox">
   <video id="player" controls autoplay></video>
+  <div id="playerControls">
+    <button onclick="goFull()">⛶</button>
+    <button onclick="cast()">📡</button>
+  </div>
 </div>
 
 <div id="content">
   <div id="bar">
-    <select id="category" onchange="filterCategory()">
-      <option value="ALL">Todas</option>
-    </select>
+    <select id="category" onchange="filterCategory()"></select>
     <input type="text" placeholder="Buscar..." oninput="search(this.value)">
     <button onclick="showFavorites()">⭐</button>
     <button onclick="openSettings()">⚙</button>
@@ -83,8 +86,8 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
 
 <div id="settings">
   <div id="settingsBox">
-    <h3>Ajustes IPTV</h3>
-    <input id="iptvUrl" style="width:100%;padding:8px" />
+    <h3>Lista IPTV</h3>
+    <input id="iptvUrl" style="width:100%;padding:8px">
     <br><br>
     <button onclick="saveSettings()">Guardar</button>
     <button onclick="closeSettings()">Cerrar</button>
@@ -92,7 +95,7 @@ body { margin:0; background:#0b0b0b; color:#eee; font-family:Arial; }
 </div>
 
 <script>
-let IPTV_URL = localStorage.getItem("iptv_url") || "https://iptv-org.github.io/iptv/index.nsfw.m3u";
+let IPTV_URL = localStorage.getItem("iptv_url") || "https://iptv-org.github.io/iptv/languages/spa.m3u";
 let all=[], filtered=[], favorites=JSON.parse(localStorage.getItem("favorites")||"[]");
 let current=0;
 
@@ -107,7 +110,7 @@ function loadIPTV(){
       if(lines[i].startsWith("#EXTINF")){
         const name=lines[i].split(",")[1];
         const group=(lines[i].match(/group-title="(.*?)"/)||[])[1]||"Otros";
-        const logo=(lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://via.placeholder.com/150x80?text=TV";
+        const logo=(lines[i].match(/tvg-logo="(.*?)"/)||[])[1]||"https://upload.wikimedia.org/wikipedia/commons/7/75/TV_icon.png";
         const url=lines[i+1];
         all.push({name,group,logo,url});
       }
@@ -121,8 +124,8 @@ function loadIPTV(){
 
 function buildCategories(){
   const sel=document.getElementById("category");
-  sel.innerHTML='<option value="ALL">Todas</option>';
-  [...new Set(all.map(c=>c.group))].forEach(g=>{
+  sel.innerHTML="";
+  ["Todos",...new Set(all.map(c=>c.group))].forEach(g=>{
     const o=document.createElement("option");
     o.value=g; o.textContent=g;
     sel.appendChild(o);
@@ -131,7 +134,7 @@ function buildCategories(){
 
 function filterCategory(){
   const v=document.getElementById("category").value;
-  filtered = v==="ALL" ? all : all.filter(c=>c.group===v);
+  filtered = v==="Todos" ? all : all.filter(c=>c.group===v);
   render();
 }
 
@@ -149,7 +152,7 @@ function render(){
     d.className="card"+(i===current?" active":"");
     d.innerHTML = `
       <img src="${c.logo}">
-      <small>${c.name}</small><br>
+      <small>${c.name}</small>
       <small onclick="event.stopPropagation();toggleFav('${c.name}')">
         ${favorites.includes(c.name)?"★":"☆"}
       </small>`;
@@ -195,6 +198,15 @@ function saveSettings(){
     closeSettings();
     loadIPTV();
   }
+}
+
+function goFull(){
+  const v=document.getElementById("player");
+  if(v.requestFullscreen) v.requestFullscreen();
+}
+
+function cast(){
+  alert("Usa 'Transmitir pantalla' desde el menú de Android para enviar a tu TV.");
 }
 </script>
 
