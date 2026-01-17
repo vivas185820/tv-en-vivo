@@ -4,100 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>TV en Vivo VT</title>
-
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <style>
 * { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: #0b0b0b;
-  color: #fff;
-  font-family: Arial, sans-serif;
-}
+body { margin:0; background:#0b0b0b; color:#fff; font-family:Arial; }
 
 #header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 44px;
-  background: #111;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  font-size: 17px;
+  position:fixed; top:0; left:0; right:0;
+  height:44px; background:#111;
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000;
 }
 
 #playerWrapper {
-  position: fixed;
-  top: 44px;
-  left: 0;
-  right: 0;
-  height: 180px;
-  background: #000;
-  z-index: 999;
+  position:fixed; top:44px; left:0; right:0;
+  height:180px; background:black; z-index:999;
 }
 
 #player {
-  width: 100%;
-  height: 100%;
-  background: #000;
-  object-fit: contain;
+  width:100%; height:100%; object-fit:contain; background:black;
 }
 
 #content {
-  margin-top: 230px;
-  padding: 10px;
+  margin-top:235px; padding:10px;
 }
 
-.controls {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
+.section-title {
+  font-size:14px; margin:8px 0 4px;
 }
 
-.controls select,
-.controls input,
-.controls button {
-  background: #1c1c1c;
-  color: #fff;
-  border: none;
-  padding: 6px 8px;
-  border-radius: 5px;
-  font-size: 13px;
+.controls select, .controls input {
+  width:100%;
+  margin-bottom:6px;
+  background:#1c1c1c;
+  color:#fff;
+  border:none;
+  padding:6px;
+  border-radius:5px;
+}
+
+.fav-btn {
+  background:#e50914;
+  border:none;
+  color:white;
+  padding:6px;
+  border-radius:5px;
+  width:100%;
+  margin-bottom:6px;
 }
 
 .grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
 }
 
 .channel {
-  background: #1a1a1a;
-  border-radius: 6px;
-  padding: 6px;
-  text-align: center;
+  background:#1a1a1a;
+  border-radius:6px;
+  padding:6px;
+  text-align:center;
 }
 
 .channel img {
-  width: 100%;
-  height: 60px;
-  object-fit: contain;
+  width:100%; height:60px; object-fit:contain;
 }
 
-.channel-name {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.fav {
-  font-size: 16px;
-  cursor: pointer;
-}
+.channel-name { font-size:12px; margin-top:4px; }
+.fav { font-size:16px; }
 </style>
 </head>
 
@@ -111,14 +86,16 @@ body {
 
 <div id="content">
 
-  <div class="controls">
-    <select id="category"></select>
-    <input type="text" id="search" placeholder="Buscar...">
-    <button id="showFavs">⭐</button>
-  </div>
+  <div class="section-title">⭐ Favoritos</div>
+  <button class="fav-btn" onclick="showFavorites()">Ver solo favoritos</button>
+
+  <div class="section-title">🗂 Categorías</div>
+  <select id="category"></select>
+
+  <div class="section-title">🔍 Buscar canal</div>
+  <input type="text" id="search" placeholder="Escribe el nombre...">
 
   <div class="grid" id="channelList"></div>
-
 </div>
 
 <script>
@@ -128,112 +105,89 @@ let allChannels = [];
 let visibleChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 
-fetch(IPTV_URL)
-  .then(r => r.text())
-  .then(data => parseM3U(data));
+fetch(IPTV_URL).then(r=>r.text()).then(parseM3U);
 
-function parseM3U(text) {
+function parseM3U(text){
   const lines = text.split("\n");
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith("#EXTINF")) {
+  for(let i=0;i<lines.length;i++){
+    if(lines[i].startsWith("#EXTINF")){
       const name = lines[i].split(",")[1];
-      const logo = (lines[i].match(/tvg-logo="(.*?)"/) || [])[1] || "https://via.placeholder.com/150x80?text=TV";
-      const group = (lines[i].match(/group-title="(.*?)"/) || [])[1] || "Otros";
-      const url = lines[i + 1];
-      allChannels.push({ name, logo, group, url });
+      const logo = (lines[i].match(/tvg-logo="(.*?)"/)||[])[1] || "https://via.placeholder.com/150x80?text=TV";
+      const group = (lines[i].match(/group-title="(.*?)"/)||[])[1] || "Otros";
+      const url = lines[i+1];
+      allChannels.push({name,logo,group,url});
     }
   }
-
   visibleChannels = allChannels;
   buildCategories();
   render();
   play(0);
 }
 
-function buildCategories() {
+function buildCategories(){
   const cat = document.getElementById("category");
-  const groups = ["Todos", ...new Set(allChannels.map(c => c.group))];
-
+  const groups = ["Todos", ...new Set(allChannels.map(c=>c.group))];
   cat.innerHTML = "";
-  groups.forEach(g => {
-    const o = document.createElement("option");
-    o.value = g;
-    o.textContent = g;
+  groups.forEach(g=>{
+    const o=document.createElement("option");
+    o.value=g; o.textContent=g;
     cat.appendChild(o);
   });
-
-  cat.onchange = () => {
-    const val = cat.value;
-    visibleChannels = val === "Todos"
-      ? allChannels
-      : allChannels.filter(c => c.group === val);
+  cat.onchange = ()=>{
+    visibleChannels = cat.value==="Todos" ? allChannels : allChannels.filter(c=>c.group===cat.value);
     render();
   };
 }
 
-document.getElementById("search").oninput = e => {
+document.getElementById("search").oninput = e=>{
   const t = e.target.value.toLowerCase();
-  visibleChannels = allChannels.filter(c => c.name.toLowerCase().includes(t));
+  visibleChannels = allChannels.filter(c=>c.name.toLowerCase().includes(t));
   render();
 };
 
-document.getElementById("showFavs").onclick = () => {
-  visibleChannels = allChannels.filter(c => favorites.includes(c.name));
+function showFavorites(){
+  visibleChannels = allChannels.filter(c=>favorites.includes(c.name));
   render();
-};
+}
 
-function render() {
-  const list = document.getElementById("channelList");
-  list.innerHTML = "";
+function render(){
+  const list=document.getElementById("channelList");
+  list.innerHTML="";
+  visibleChannels.forEach((ch,i)=>{
+    const div=document.createElement("div");
+    div.className="channel";
 
-  visibleChannels.forEach((ch, i) => {
-    const div = document.createElement("div");
-    div.className = "channel";
-
-    const img = document.createElement("img");
-    img.src = ch.logo;
-
-    const name = document.createElement("div");
-    name.className = "channel-name";
-    name.textContent = ch.name;
-
-    const fav = document.createElement("div");
-    fav.className = "fav";
-    fav.textContent = favorites.includes(ch.name) ? "★" : "☆";
-    fav.onclick = (e) => {
-      e.stopPropagation();
-      toggleFavorite(ch.name);
-    };
-
-    div.appendChild(img);
-    div.appendChild(name);
-    div.appendChild(fav);
-
-    div.onclick = () => play(i);
+    div.innerHTML=`
+      <img src="${ch.logo}">
+      <div class="channel-name">${ch.name}</div>
+      <div class="fav" onclick="toggleFavorite('${ch.name}', event)">
+        ${favorites.includes(ch.name)?"★":"☆"}
+      </div>
+    `;
+    div.onclick=()=>play(i);
     list.appendChild(div);
   });
 }
 
-function play(index) {
-  const video = document.getElementById("player");
-  const url = visibleChannels[index].url;
-
-  if (Hls.isSupported()) {
-    const hls = new Hls();
+function play(index){
+  const video=document.getElementById("player");
+  const url=visibleChannels[index].url;
+  if(Hls.isSupported()){
+    const hls=new Hls();
     hls.loadSource(url);
     hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-  } else {
-    video.src = url;
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play());
+  }else{
+    video.src=url;
     video.play();
   }
 }
 
-function toggleFavorite(name) {
-  if (favorites.includes(name)) {
-    favorites = favorites.filter(f => f !== name);
-  } else {
+function toggleFavorite(name, e){
+  e.stopPropagation();
+  if(favorites.includes(name)){
+    favorites=favorites.filter(f=>f!==name);
+  }else{
     favorites.push(name);
   }
   localStorage.setItem("favorites", JSON.stringify(favorites));
